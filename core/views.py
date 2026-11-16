@@ -219,8 +219,9 @@ def apply_scheduled_employment_change(request, pk):
     else:
         try:
             employee_service.apply_scheduled_change(change, by=request.user)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
+        except (ValidationError, attendance_service.AttendanceError) as exc:
+            msg = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+            messages.error(request, msg)
         else:
             messages.success(request, "Scheduled employment change applied.")
     return redirect("scheduled_employment_changes")
@@ -523,7 +524,7 @@ class AttendanceDelete(PermissionRequiredMixin, Base, DeleteView):
     model, title, template_name = Attendance, "Delete attendance entry", "attendance_confirm_delete.html"
     success_url, success_message = reverse_lazy("attendance_list"), "Entry deleted."
 
-    def form_valid(self, form):
+    def form_valid(self, form): 
         reason = self.request.POST.get("reason", "").strip()
         if not reason:
             return self.render_to_response(self.get_context_data(form=form, reason_error=True))
@@ -702,7 +703,10 @@ def correction_decide(request, pk):
             messages.success(request, f"Request {'approved: attendance updated' if approve else 'rejected'}.")
         except attendance_service.AttendanceError as exc:
             messages.error(request, str(exc))
-    return redirect(request.POST.get("next") if request.POST.get("next", "").startswith("/") else "correction_list")
+    next_url = request.POST.get("next") or request.GET.get("next") or request.META.get("HTTP_REFERER")
+    if next_url and next_url.startswith("/"):
+        return redirect(next_url)
+    return redirect("correction_list")
 
 
 @permission_required(roles.VIEW_ATTENDANCE_AUDIT)
@@ -794,8 +798,9 @@ def payroll(request):
         require_perm(request.user, roles.GENERATE_PAYROLL)
         try:
             payroll_service.generate_payroll(p["month"], p["year"], user=request.user)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
+        except (ValidationError, attendance_service.AttendanceError) as exc:
+            msg = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+            messages.error(request, msg)
         else:
             messages.success(request, "Draft payroll generated. Review and finalize it in Payroll runs.")
         return redirect(f"{request.path}?month={p['month']}&year={p['year']}")
@@ -930,18 +935,22 @@ def leave_action(request, pk):
         try:
             if action == "approve":
                 leave_service.approve_leave(leave, note, by=request.user)
-                messages.success(request, "Leave approved and attendance recorded.")
+                messages.success(request, f"Leave for {leave.emp.name} approved and attendance recorded.")
             elif action == "reject":
                 leave_service.reject_leave(leave, note, by=request.user)
-                messages.info(request, "Leave rejected.")
+                messages.info(request, f"Leave for {leave.emp.name} rejected.")
             elif action == "cancel":
                 leave_service.cancel_leave(leave, by=request.user, note=note)
-                messages.info(request, "Leave cancelled and attendance restored.")
+                messages.info(request, f"Leave for {leave.emp.name} cancelled and attendance restored.")
             else:
                 messages.error(request, "Choose a valid leave action.")
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
+        except (ValidationError, attendance_service.AttendanceError) as exc:
+            msg = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+            messages.error(request, msg)
 
+    next_url = request.POST.get("next") or request.GET.get("next") or request.META.get("HTTP_REFERER")
+    if next_url and next_url.startswith("/"):
+        return redirect(next_url)
     return redirect("leaves_list")
 
 

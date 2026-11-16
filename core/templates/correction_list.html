@@ -21,9 +21,10 @@
       {% if mode == 'mine' and c.status == 'PENDING' %}<form method="post" action="{% url 'correction_cancel' c.pk %}" style="display:inline">{% csrf_token %}<button class="linklike">Cancel</button></form>{% endif %}
       {% if mode == 'review' and c.status == 'PENDING' %}
       <form method="post" action="{% url 'correction_decide' c.pk %}" class="inline">{% csrf_token %}
-        <input name="note" placeholder="Note (required to reject)" maxlength="255" aria-label="Decision note">
-        <button class="btn sm" name="action" value="approve">Approve</button>
-        <button class="btn ghost sm" name="action" value="reject">Reject</button>
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <input name="note" placeholder="Remark / reason (optional)" maxlength="255" aria-label="Decision note">
+        <button class="btn sm" name="action" value="approve">&#10003; Approve</button>
+        <button class="btn ghost sm danger" name="action" value="reject" onclick="return confirm('Are you sure you want to reject this request?');">&#10005; Reject</button>
       </form>{% endif %}
     </td>
   </tr>{% empty %}<tr><td colspan="8" class="empty">{% if mode == 'mine' %}You have not made any correction requests.{% else %}Nothing to review.{% endif %}</td></tr>{% endfor %}

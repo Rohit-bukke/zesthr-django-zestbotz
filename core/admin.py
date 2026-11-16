@@ -8,7 +8,8 @@ from apps.organizations.admin_base import TenantAdmin
 from . import roles
 from .services import accounts
 from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Employee, EmploymentType, Holiday, JobPosition, Salary, ScheduledEmploymentChange, WorkLocation,
-                     WorkSchedule)
+                     WorkSchedule, LeaveApplication, AttendanceCorrectionRequest)
+from .services import leave as leave_service, corrections as corrections_service
 
 
 @admin.register(Employee)
@@ -249,6 +250,91 @@ class LeaveDecisionAdmin(TenantAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(LeaveApplication)
+class LeaveApplicationAdmin(TenantAdmin):
+    list_display = ("emp", "leave_type", "start_date", "end_date", "days_count", "status", "applied_on")
+    list_filter = ("status", "leave_type")
+    search_fields = ("emp__name", "reason")
+    actions = ["approve_selected", "reject_selected"]
+
+    def get_queryset(self, request):
+        return scope_queryset(LeaveApplication.objects.select_related("emp", "emp__organization"),
+                              request.user, "emp__organization")
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(roles.VIEW_ALL_LEAVES)
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description="Approve selected leave applications")
+    def approve_selected(self, request, queryset):
+        done, failed = 0, 0
+        for leave in queryset.filter(status="PENDING"):
+            try:
+                leave_service.approve_leave(leave, note="Approved via Django admin", by=request.user)
+                done += 1
+            except Exception as exc:
+                failed += 1
+                self.message_user(request, f"Error approving #{leave.pk}: {exc}", messages.ERROR)
+        if done:
+            self.message_user(request, f"{done} leave application(s) approved.")
+
+    @admin.action(description="Reject selected leave applications")
+    def reject_selected(self, request, queryset):
+        done = 0
+        for leave in queryset.filter(status="PENDING"):
+            try:
+                leave_service.reject_leave(leave, note="Rejected via Django admin", by=request.user)
+                done += 1
+            except Exception as exc:
+                self.message_user(request, f"Error rejecting #{leave.pk}: {exc}", messages.ERROR)
+        if done:
+            self.message_user(request, f"{done} leave application(s) rejected.")
+
+
+@admin.register(AttendanceCorrectionRequest)
+class AttendanceCorrectionRequestAdmin(TenantAdmin):
+    list_display = ("emp", "date", "requested_status", "status", "reason", "created_at")
+    list_filter = ("status", "requested_status")
+    search_fields = ("emp__name", "reason")
+    actions = ["approve_selected", "reject_selected"]
+
+    def get_queryset(self, request):
+        return scope_queryset(AttendanceCorrectionRequest.objects.select_related("emp", "emp__organization"),
+                              request.user, "emp__organization")
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(roles.REVIEW_CORRECTIONS)
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description="Approve selected correction requests")
+    def approve_selected(self, request, queryset):
+        done = 0
+        for req in queryset.filter(status="PENDING"):
+            try:
+                corrections_service.decide(req, approve=True, note="Approved via Django admin", by=request.user)
+                done += 1
+            except Exception as exc:
+                self.message_user(request, f"Error approving request #{req.pk}: {exc}", messages.ERROR)
+        if done:
+            self.message_user(request, f"{done} correction request(s) approved.")
+
+    @admin.action(description="Reject selected correction requests")
+    def reject_selected(self, request, queryset):
+        done = 0
+        for req in queryset.filter(status="PENDING"):
+            try:
+                corrections_service.decide(req, approve=False, note="Rejected via Django admin", by=request.user)
+                done += 1
+            except Exception as exc:
+                self.message_user(request, f"Error rejecting request #{req.pk}: {exc}", messages.ERROR)
+        if done:
+            self.message_user(request, f"{done} correction request(s) rejected.")
 
 
 from .models import LeaveEntitlement, LeaveBalanceAdjustment

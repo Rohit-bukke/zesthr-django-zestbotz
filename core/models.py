@@ -416,7 +416,7 @@ class Attendance(models.Model):
         errors = {}
         from .timeutil import today_for
 
-        if self.date and self.date > (today_for(self.emp) if self.emp_id else timezone.localdate()):
+        if self.status != "L" and self.date and self.date > (today_for(self.emp) if self.emp_id else timezone.localdate()):
             errors["date"] = "Attendance cannot be recorded for a future date."
         if self.emp_id and self.date:
             if self.date < self.emp.joined_on:

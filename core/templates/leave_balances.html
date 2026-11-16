@@ -1,7 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Leave balances{% endblock %}
+{% block title %}Leave Balances | HRMS Portal{% endblock %}
 {% block content %}
-<div class="head"><h1>{{ employee.name }}: leave balances for {{ year }}</h1></div>
+<div class="head">
+  <div>
+    <h1>Leave Balances &mdash; {{ employee.name }} <small>({{ year }})</small></h1>
+    <p class="muted">{{ employee.designation }}{% if employee.department %} &bull; {{ employee.department.name }}{% endif %}</p>
+  </div>
+  {% if all_employees %}
+  <form method="get" class="actions" style="margin: 0;">
+    <label style="display: flex; align-items: center; gap: .5rem; font-size: .9rem;">
+      <span>Employee:</span>
+      <select name="emp" onchange="this.form.submit()" style="padding: .4rem .6rem; border-radius: 6px;">
+        {% for e in all_employees %}
+        <option value="{{ e.pk }}" {% if e.pk == employee.pk %}selected{% endif %}>{{ e.name }} ({{ e.designation }})</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  {% endif %}
+</div>
 <section class="card"><div class="scroll"><table>
 <thead><tr><th>Leave type</th><th>Earned</th><th>Carryover</th><th>Adjustments</th><th>Approved</th><th>Pending</th><th>Remaining</th></tr></thead>
 <tbody>{% for row in balances %}<tr><td>{{ row.entitlement.get_leave_type_display }}</td><td>{{ row.earned }}</td><td>{{ row.carryover }}</td><td>{{ row.adjustments }}</td><td>{{ row.approved }}</td><td>{{ row.pending }}</td><td>{{ row.remaining }}</td></tr>

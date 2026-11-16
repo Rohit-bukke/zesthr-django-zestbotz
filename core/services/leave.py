@@ -138,15 +138,15 @@ def cancel_leave(leave, *, by, note):
     if leave.status not in ("PENDING", "APPROVED"):
         raise ValidationError("This leave request cannot be cancelled.")
     if leave.status == "APPROVED":
-        decision = leave.decisions.get(status="APPROVED")
+        decision = leave.decisions.filter(status="APPROVED").last()
         day = leave.start_date
         while day <= leave.end_date:
             record = Attendance.objects.select_for_update().filter(emp=leave.emp, date=day).first()
             if (not record or record.status != "L" or record.check_in or record.check_out or
-                    AttendanceAudit.objects.filter(emp=leave.emp, date=day,
-                                                   created_at__gt=decision.created_at).exists()):
+                    (decision and AttendanceAudit.objects.filter(emp=leave.emp, date=day,
+                                                   created_at__gt=decision.created_at).exists())):
                 raise ValidationError("Attendance changed after approval. Review it before cancellation.")
-            previous = decision.previous_attendance.get(day.isoformat())
+            previous = decision.previous_attendance.get(day.isoformat()) if (decision and decision.previous_attendance) else None
             if previous is None:
                 attendance_service.record_audit(AttendanceAudit.MANUAL_DELETE, record,
                     attendance_service.snapshot(record), by=by, reason=note, deleted=True, emp=leave.emp, day=day)
